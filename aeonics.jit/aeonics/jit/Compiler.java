@@ -4,18 +4,22 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Writer;
 import java.lang.reflect.Constructor;
-import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.StringJoiner;
 
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
-import javax.tools.JavaFileManager;
+import javax.tools.JavaCompiler.CompilationTask;
 import javax.tools.JavaFileObject;
-import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
 
+import aeonics.Plugin;
 import aeonics.data.Data;
+import aeonics.manager.Logger;
+import aeonics.manager.Manager;
 
 public class Compiler
 {
@@ -26,22 +30,54 @@ public class Compiler
 		public String toString() { return data.toString(); }
 	}
 	
-	public static <T> T compile(String code, ClassLoader context)
+	private static String generateUniqueModuleName()
 	{
-		return compile(null, code, context);
+		long now = System.nanoTime();
+		if( now < 0 ) now *= -1;
+		return "_m_" + now + "_";
+	}
+	
+	private static Writer getLogWriter()
+	{
+		return new Writer()
+		{
+			ByteArrayOutputStream data = new ByteArrayOutputStream();
+			public void write(char[] cbuf, int off, int len) throws IOException { data.write(new String(cbuf).getBytes(), off, len); }
+			public synchronized void flush() throws IOException { if( data.size() == 0 ) return; System.out.println(data.toString()); data.reset(); }
+			public void close() throws IOException { flush(); }
+		};
+	}
+	
+	private static String getModuleInfo(String moduleName)
+	{
+		String moduleInfo = "module " + moduleName + " { ";
+		for(String p : Plugin.all()) moduleInfo += "requires " + p + "; ";
+		moduleInfo += "}";
+		
+		return moduleInfo;
+	}
+	
+	private static List<String> getCompilerOptions(String module)
+	{
+		List<String> options = new ArrayList<>();
+		// we need to specify the module name here to force the compiler to compile as a module
+		options.add("--module"); options.add(module);
+		// we need to specify the output directory even though we do not use it
+		options.add("-d"); options.add("X");
+		// we need to specify the module source directory even though we do not use it
+		options.add("--module-source-path"); options.add("X");
+		// we need to include all modules so that the compiler is aware of them
+		options.add("--add-modules");
+		StringJoiner j = new StringJoiner(",");
+		for(String p : Plugin.all()) j.add(p);
+		options.add(j.toString());
+		
+		return options;
 	}
 	
 	public static <T> T compile(String code)
 	{
-		return compile(null, code, null);
-	}
-	
-	@SuppressWarnings("unchecked")
-	public static <T> T compile(String className, String code, ClassLoader context)
-	{
-		JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
-		DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<JavaFileObject>();
-		JavaFileManager fileManager = javac.getStandardFileManager(null, null, null);
+		String className = null;
 		
 		// try to guess the className. This is not bullet proof but should allow "normal" code.
 		if( className == null )
@@ -69,17 +105,47 @@ public class Compiler
 			}
 		}
 		
-		if( javac.getTask(logwriter, null, diagnostics, null, null, Arrays.asList(new Source(className, code))).call() )
+		return compile(className, code, aeonics.Plugin.class.getClassLoader());
+	}
+	
+	@SuppressWarnings("unchecked")
+	private static <T> T compile(String className, String code, ClassLoader context)
+	{
+		JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
+		if( javac == null )
+		{
+			Manager.of(Logger.class).warning(Dynamic.class, "Compilation is not possible: no Java compiler available");
+			throw new IllegalStateException("No Java compiler available");
+		}
+		
+		String module = generateUniqueModuleName();
+		DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<JavaFileObject>();
+		VolatileFileManager fileManager = new VolatileFileManager(module, javac.getStandardFileManager(null, null, null));
+		
+		CompilationTask task = javac.getTask(
+			getLogWriter(), 
+			fileManager, 
+			diagnostics, 
+			getCompilerOptions(module), 
+			null, 
+			Arrays.asList(
+				new DynamicFileObject.Source("module-info", getModuleInfo(module)), 
+				new DynamicFileObject.Source(className, "package " + module + ";\n" + code)
+				)
+			);
+		
+		if( task.call() )
 		{
 			try
 			{
-				ClassLoader c = fileManager.getClassLoader(javax.tools.StandardLocation.CLASS_PATH);
-				Class<?> z = c.loadClass(className);
+				Class<?> z = fileManager.getClassLoader(null).loadClass(module + "." + className);
 				Constructor<?> x = z.getConstructor();
-				return ((T)x.newInstance());
+				T instance = (T)x.newInstance();
+				return instance;
 			}
 			catch(Exception e)
 			{
+				e.printStackTrace();
 				throw new IllegalArgumentException(e);
 			}
 		}
@@ -91,19 +157,4 @@ public class Compiler
 			throw new CompileException(error);
 		}
 	}
-	
-	private static class Source extends SimpleJavaFileObject
-	{
-		final String code;
-		Source(String name, String code) { super(URI.create("string:///" + name.replace('.', '/') + Kind.SOURCE.extension), Kind.SOURCE); this.code = code; }
-		public CharSequence getCharContent(boolean ignoreEncodingErrors) { return code; }
-	}
-	
-	private static Writer logwriter = new Writer()
-	{
-		ByteArrayOutputStream data = new ByteArrayOutputStream();
-		public void write(char[] cbuf, int off, int len) throws IOException { data.write(new String(cbuf).getBytes(), off, len); }
-		public synchronized void flush() throws IOException { if( data.size() == 0 ) return; System.out.println(data.toString()); data.reset(); }
-		public void close() throws IOException { flush(); }
-	};
 }
