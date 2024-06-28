@@ -145,7 +145,6 @@ public class Compiler
 			}
 			catch(Exception e)
 			{
-				e.printStackTrace();
 				throw new IllegalArgumentException(e);
 			}
 		}

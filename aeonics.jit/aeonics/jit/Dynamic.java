@@ -27,8 +27,9 @@ public class Dynamic extends Item<Dynamic.Type>
 			add(new Parameter("code")
 				.bindable(false)
 				.summary("The class source code")
-				.description("This property should contain the Java code of a class to compile. The compiled class should be a supplier of entity."));
-			
+				.description("This property should contain the Java code of a class to compile. The compiled class should be a supplier of entity.")
+				.format(Parameter.Format.CODE)
+				);
 		}
 	}
 	
@@ -80,14 +81,11 @@ public class Dynamic extends Item<Dynamic.Type>
 				Supplier<Entity> supplier = (Supplier<Entity>) instance;
 				e = supplier.get();
 
-				Registry.add(e);
 				entity.set(e);
-				
 				return e;
 			}
 			catch(Exception ex)
 			{
-				ex.printStackTrace();
 				Manager.of(Logger.class).warning(Dynamic.class, ex);
 				return null;
 			}
