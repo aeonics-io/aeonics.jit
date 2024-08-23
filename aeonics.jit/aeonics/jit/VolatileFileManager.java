@@ -90,9 +90,9 @@ class VolatileFileManager extends ForwardingJavaFileManager<JavaFileManager>
 			for( Set<Location> l : fileManager.listLocationsForModules(location) )
 				locations.add(l);
 			Set<Location> pl = new HashSet<Location>();
-			for( String p : Plugin.all() )
+			for( Plugin p : Plugin.all() )
 			{
-				Location ml = getLocationForModule(location, p);
+				Location ml = getLocationForModule(location, p.name());
 				if( ml != null )
 					pl.add(ml);
 			}

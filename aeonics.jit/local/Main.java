@@ -4,7 +4,6 @@ import aeonics.Plugin;
 import aeonics.jit.Dynamic;
 import aeonics.manager.Lifecycle;
 import aeonics.manager.Lifecycle.Phase;
-import aeonics.manager.Manager;
 import aeonics.template.Factory;
 import aeonics.util.Callback;
 
@@ -15,8 +14,8 @@ public class Main extends Plugin
 	
 	public void start()
 	{
-		Manager.of(Lifecycle.class).on(Phase.LOAD, Callback.once(() -> onLoad()));
-		Manager.of(Lifecycle.class).on(Phase.RUN, Callback.once(() -> onRun()));
+		Lifecycle.on(Phase.LOAD, Callback.once(() -> onLoad()));
+		Lifecycle.on(Phase.RUN, Callback.once(() -> onRun()));
 	}
 	
 	private static void onLoad()

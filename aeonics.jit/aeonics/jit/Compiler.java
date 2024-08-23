@@ -51,7 +51,7 @@ public class Compiler
 	private static String getModuleInfo(String moduleName)
 	{
 		String moduleInfo = "module " + moduleName + " { ";
-		for(String p : Plugin.all()) moduleInfo += "requires " + p + "; ";
+		for(Plugin p : Plugin.all()) moduleInfo += "requires " + p.name() + "; ";
 		moduleInfo += "}";
 		
 		return moduleInfo;
@@ -69,7 +69,7 @@ public class Compiler
 		// we need to include all modules so that the compiler is aware of them
 		options.add("--add-modules");
 		StringJoiner j = new StringJoiner(",");
-		for(String p : Plugin.all()) j.add(p);
+		for(Plugin p : Plugin.all()) j.add(p.name());
 		options.add(j.toString());
 		
 		return options;
