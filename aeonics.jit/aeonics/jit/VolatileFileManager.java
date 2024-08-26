@@ -35,8 +35,8 @@ class VolatileFileManager extends ForwardingJavaFileManager<JavaFileManager>
 		currentModuleName = moduleName;
 		currentClassLoader = new DynamicClassLoader(moduleName);
 		
-		String path = System.getProperty("AEONICS_PLUGIN_LOADER_PATH");
-		if( path == null || path.isBlank() ) path = System.getenv("AEONICS_PLUGIN_LOADER_PATH");
+		String path = System.getProperty("AEONICS_PLUGIN_PATH");
+		if( path == null || path.isBlank() ) path = System.getenv("AEONICS_PLUGIN_PATH");
 		if( path == null || path.isBlank() ) path = "plugins";
 		
 		// locate all modules for compilation only
