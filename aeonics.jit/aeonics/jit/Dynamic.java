@@ -7,7 +7,6 @@ import aeonics.entity.Entity;
 import aeonics.entity.Registry;
 import aeonics.manager.Logger;
 import aeonics.manager.Manager;
-import aeonics.template.Factory;
 import aeonics.template.Item;
 import aeonics.template.Parameter;
 import aeonics.util.StringUtils;
@@ -38,13 +37,12 @@ public class Dynamic extends Item<Dynamic.Type>
 	{
 		Dynamic.Template t = new Dynamic.Template(target(), this.getClass())
 			.creator(creator())
-			.builder((data, instance) ->
+			.onCreate((data, instance) ->
 			{
-				Registry.add(instance);
 				if( instance instanceof Dynamic.Type )
 					((Dynamic.Type)instance).compile();
 			})
-			.modifier((data, instance) ->
+			.onUpdate((data, instance) ->
 			{
 				if( instance instanceof Dynamic.Type )
 				{
@@ -54,7 +52,7 @@ public class Dynamic extends Item<Dynamic.Type>
 					((Dynamic.Type)instance).compile();
 				}
 			});
-		return (Dynamic.Template) Factory.add(t);
+		return t;
 	}
 	
 	public static class Type extends Entity

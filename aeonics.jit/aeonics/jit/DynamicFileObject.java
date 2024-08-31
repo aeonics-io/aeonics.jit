@@ -8,7 +8,6 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.lang.module.ModuleReference;
 import java.net.URI;
-import java.net.URL;
 
 import javax.tools.SimpleJavaFileObject;
 
@@ -71,7 +70,7 @@ class DynamicFileObject
 		public InputStream openInputStream() throws IOException
 		{
 			String url = "jar:" + reference.location().get() + "!" + toUri().getPath();
-			return new URL(url).openStream();
+			return URI.create(url).toURL().openStream();
 		}
 		
 		@Override
