@@ -51,10 +51,10 @@ public class Endpoints
 				{
 					instance = Registry.of(Dynamic.class).get(parameters.asString("id"));
 					if( instance == null ) throw new HttpException(413, "Invalid dynamic entity id to update");
-					Factory.of(Dynamic.class).get(Dynamic.class).update(Data.map().put("code", parameters.get("code")), instance);
+					Factory.of(Dynamic.class).get(Dynamic.class).update(Data.map().put("parameters", Data.map().put("code", parameters.get("code"))), instance);
 				}
 				else
-					instance = Factory.of(Dynamic.class).get(Dynamic.class).create(Data.map().put("code", parameters.get("code")));
+					instance = Factory.of(Dynamic.class).get(Dynamic.class).create(Data.map().put("parameters", Data.map().put("code", parameters.get("code"))));
 				
 				Entity entity = instance.entity();
 				Registry.add(entity);

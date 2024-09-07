@@ -5,7 +5,6 @@ import aeonics.jit.Dynamic;
 import aeonics.manager.Lifecycle;
 import aeonics.manager.Lifecycle.Phase;
 import aeonics.template.Factory;
-import aeonics.util.Callback;
 
 public class Main extends Plugin
 {
@@ -14,16 +13,16 @@ public class Main extends Plugin
 	
 	public void start()
 	{
-		Lifecycle.on(Phase.LOAD, Callback.once(() -> onLoad()));
-		Lifecycle.on(Phase.RUN, Callback.once(() -> onRun()));
+		Lifecycle.on(Phase.LOAD, this::onLoad);
+		Lifecycle.on(Phase.RUN, this::onRun);
 	}
 	
-	private static void onLoad()
+	private void onLoad()
 	{
 		Factory.add(new Dynamic());
 	}
 	
-	private static void onRun()
+	private void onRun()
 	{
 		aeonics.jit.endpoint.Endpoints.register();
 	}
