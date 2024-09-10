@@ -40,7 +40,7 @@ class VolatileFileManager extends ForwardingJavaFileManager<JavaFileManager>
 		if( path == null || path.isBlank() ) path = "plugins";
 		
 		// locate all modules for compilation only
-		pluginsFinder = ModuleFinder.of(Paths.get(path));
+		pluginsFinder = ModuleFinder.of(Paths.get(path), Paths.get("."));
 		pluginsFinder.findAll();
 	}
 	

@@ -20,6 +20,7 @@ import aeonics.Plugin;
 import aeonics.data.Data;
 import aeonics.manager.Logger;
 import aeonics.manager.Manager;
+import aeonics.util.Tuples.Tuple;
 
 public class Compiler
 {
@@ -51,7 +52,8 @@ public class Compiler
 	private static String getModuleInfo(String moduleName)
 	{
 		String moduleInfo = "module " + moduleName + " { ";
-		for(Plugin p : Plugin.all()) moduleInfo += "requires " + p.name() + "; ";
+		for(Plugin p : Plugin.all()) 
+			moduleInfo += "requires " + p.name() + "; ";
 		moduleInfo += "}";
 		
 		return moduleInfo;
@@ -69,13 +71,14 @@ public class Compiler
 		// we need to include all modules so that the compiler is aware of them
 		options.add("--add-modules");
 		StringJoiner j = new StringJoiner(",");
-		for(Plugin p : Plugin.all()) j.add(p.name());
+		for(Plugin p : Plugin.all())
+			j.add(p.name());
 		options.add(j.toString());
 		
 		return options;
 	}
 	
-	public static <T> T compile(String code)
+	public static <T> Tuple<T, String> compile(String code)
 	{
 		String className = null;
 		
@@ -109,7 +112,7 @@ public class Compiler
 	}
 	
 	@SuppressWarnings("unchecked")
-	private static <T> T compile(String className, String code, ClassLoader context)
+	private static <T> Tuple<T, String> compile(String className, String code, ClassLoader context)
 	{
 		JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
 		if( javac == null )
@@ -130,7 +133,7 @@ public class Compiler
 			null, 
 			Arrays.asList(
 				new DynamicFileObject.Source("module-info", getModuleInfo(module)), 
-				new DynamicFileObject.Source(className, "package " + module + ";\n" + code)
+				new DynamicFileObject.Source(module + "." + className, "package " + module + "; " + code)
 				)
 			);
 		
@@ -141,7 +144,7 @@ public class Compiler
 				Class<?> z = fileManager.getClassLoader(null).loadClass(module + "." + className);
 				Constructor<?> x = z.getConstructor();
 				T instance = (T)x.newInstance();
-				return instance;
+				return Tuple.of(instance, module);
 			}
 			catch(Exception e)
 			{

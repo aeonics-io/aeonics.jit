@@ -1,14 +1,18 @@
 package aeonics.jit;
 
+import java.io.Closeable;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
+import aeonics.data.Data;
 import aeonics.entity.Entity;
 import aeonics.entity.Registry;
-import aeonics.manager.Logger;
-import aeonics.manager.Manager;
+import aeonics.jit.Compiler.CompileException;
+import aeonics.template.Factory;
 import aeonics.template.Item;
 import aeonics.template.Parameter;
+import aeonics.template.Relationship;
+import aeonics.util.Functions.Supplier;
+import aeonics.util.Tuples.Tuple;
 import aeonics.util.StringUtils;
 
 /**
@@ -29,64 +33,82 @@ public class Dynamic extends Item<Dynamic.Type>
 				.description("This property should contain the Java code of a class to compile. The compiled class should be a supplier of entity.")
 				.format(Parameter.Format.CODE)
 				);
+			add(new Relationship("child")
+				.summary("Linked entity")
+				.description("Link to the dynamically generated entity. The target category will be modified at runtime to reflect the category of the generated entity.")
+				.category(Dynamic.class)
+				.min(0).max(1));
 		}
 	}
 	
 	@Override
 	public Dynamic.Template template()
 	{
-		Dynamic.Template t = new Dynamic.Template(target(), this.getClass())
-			.creator(creator())
-			.onCreate((data, instance) ->
-			{
-				if( instance instanceof Dynamic.Type )
-					((Dynamic.Type)instance).compile();
-			})
-			.onUpdate((data, instance) ->
-			{
-				if( instance instanceof Dynamic.Type )
-				{
-					Entity e = ((Dynamic.Type)instance).entity.get();
-					if( e != null )
-						Registry.of(e.category()).remove(e.id());
-					((Dynamic.Type)instance).compile();
-				}
-			});
-		return t;
+		return new Dynamic.Template(target(), this.getClass())
+			.creator(creator());
 	}
 	
-	public static class Type extends Entity
+	public static class Type extends Entity implements Closeable
 	{
+		public void close() { cleanup(); }
+		private void cleanup()
+		{
+			// cleanup the entity from the registry
+			// and cleanup the factory in case it is linked to this entity
+			Entity e = entity.getAndSet(null);
+
+			if( e != null )
+			{
+				removeRelation("child", e);
+				Registry.of(e.category()).remove(e.id());
+				
+				if( e.type().startsWith(module()) )
+					Factory.of(e.category()).remove(e.type());
+			}
+		}
+		
 		private AtomicReference<Entity> entity = new AtomicReference<>();
+		private String module = null;
 		
 		public Entity entity() { return entity.get(); }
 		
-		/**
-		 * Compiles some code at runtime and returns an instance of the compiled class.
-		 * This method should only be called once.
-		 * @return an instance of the compiled class
-		 */
-		@SuppressWarnings("unchecked")
-		private synchronized Entity compile()
+		public String module() { return module; }
+		
+		public String relatedCategory()
 		{
 			Entity e = entity.get();
-			if( e != null ) return e;
-				
-			try
-			{
-				String code = valueOf("code").asString();
-				Object instance = Compiler.compile(code);
-				Supplier<Entity> supplier = (Supplier<Entity>) instance;
-				e = supplier.get();
+			if( e == null ) return null;
+			else return e.category();
+		}
+		
+		/**
+		 * Compiles some code at runtime and returns an instance of the compiled class.
+		 * This method should only be called once the source code has changed.
+		 * @return an instance of the compiled class
+		 * @throws CompileException if the compilation fails. The details are provided in the exception data.
+		 * @throws Exception if something else happens
+		 */
+		@SuppressWarnings("unchecked")
+		public synchronized Entity compile() throws CompileException, Exception
+		{
+			cleanup();
+			
+			// compile the new code
+			
+			String code = valueOf("code").asString();
+			Tuple<Object, String> instance = Compiler.compile(code);
+			Supplier<Entity> supplier = (Supplier<Entity>) instance.a;
+			Entity e = supplier.get();
+			module = instance.b;
 
-				entity.set(e);
-				return e;
-			}
-			catch(Exception ex)
-			{
-				Manager.of(Logger.class).warning(Dynamic.class, ex);
-				return null;
-			}
+			entity.set(e);
+			
+			// update the relationship to reflect this entity's category
+			this.removeRelation("child");
+			this.defineRelation(new Relationship("child").category(e.category()));
+			this.addRelation("child", e);
+			
+			return e;
 		}
 		
 		/**
@@ -94,9 +116,26 @@ public class Dynamic extends Item<Dynamic.Type>
 		 */
 		@Override
 		public final String category() { return StringUtils.toLowerCase(Dynamic.class); }
+		
+		@Override
+		public Data export()
+		{
+			return super.export()
+				.put("related_module", module())
+				.put("related_category", relatedCategory())
+				;
+		}
+		
+		@Override
+		public Data snapshot()
+		{
+			Data s = super.snapshot();
+			s.remove("relationships");
+			return s;
+		}
 	}
 	
 	protected Class<? extends Type> defaultTarget() { return Dynamic.Type.class; }
-	protected Supplier<? extends Type> defaultCreator() { return Dynamic.Type::new; }
+	protected java.util.function.Supplier<? extends Type> defaultCreator() { return Dynamic.Type::new; }
 	protected Class<? extends Item<? super Type>> category() { return Dynamic.class; }
 }

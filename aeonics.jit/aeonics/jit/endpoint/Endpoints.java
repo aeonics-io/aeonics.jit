@@ -24,8 +24,32 @@ public class Endpoints
 		// all endpoints will be added to the registry automatically
 	}
 	
+	private static final Endpoint.Rest.Type list = new Endpoint.Rest() { }
+		.template()
+		.returns("A list of dynamic entities repesentation.")
+		.summary("Search dynamic entities by category")
+		.description("Returns the list of dynamic elemnts that have a generated entity part of the specified category.")
+		.add(new Parameter("category")
+			.summary("Category")
+			.description("The related entity category")
+			.format(Parameter.Format.TEXT))
+		.create()
+		.<Rest.Type>cast()
+		.process((params) -> {
+			Data list = Data.list();
+			for( Dynamic.Type d : Registry.of(Dynamic.class) )
+				if( d.relatedCategory().equals(params.asString("category")) )
+					list.add(d.export());
+			return list;
+		})
+		.url(ROOT + "{category}")
+		.method("GET")
+		;
+	
 	private static final Endpoint.Rest.Type dynamic = new Endpoint.Rest() { }
 		.template()
+		.returns("In case the compilation is successful, the response contains the id of the new dynamic entity, the genetated entity category, and the generated entity id. "
+				+ "In case of error, a 413 status code is returned with the error property set to the compilation error details.")
 		.summary("Create a new entity from source code")
 		.description("This endpoint compiles the provided source code and registers the entity instance in the registry."
 			+ "The endpoint returns the newly created entity id and category.")
@@ -47,17 +71,17 @@ public class Endpoints
 			try
 			{
 				Dynamic.Type instance = null;
-				if( parameters.isEmpty("id") )
+				if( !parameters.isEmpty("id") )
 				{
 					instance = Registry.of(Dynamic.class).get(parameters.asString("id"));
 					if( instance == null ) throw new HttpException(413, "Invalid dynamic entity id to update");
-					Factory.of(Dynamic.class).get(Dynamic.class).update(Data.map().put("parameters", Data.map().put("code", parameters.get("code"))), instance);
+					instance.parameter("code", parameters.get("code"));
 				}
 				else
 					instance = Factory.of(Dynamic.class).get(Dynamic.class).create(Data.map().put("parameters", Data.map().put("code", parameters.get("code"))));
 				
+				instance.compile();
 				Entity entity = instance.entity();
-				Registry.add(entity);
 				
 				return Data.map()
 					.put("id", instance.id())
@@ -66,7 +90,7 @@ public class Endpoints
 			}
 			catch(CompileException ce)
 			{
-				throw new HttpException(413, ce.data);
+				throw new HttpException(413, Data.map().put("error", ce.data));
 			}
 			catch(Exception e)
 			{
