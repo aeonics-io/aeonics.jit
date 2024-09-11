@@ -38,7 +38,7 @@ public class Endpoints
 		.process((params) -> {
 			Data list = Data.list();
 			for( Dynamic.Type d : Registry.of(Dynamic.class) )
-				if( d.relatedCategory().equals(params.asString("category")) )
+				if( params.asString("category").equals(d.relatedCategory()) )
 					list.add(d.export());
 			return list;
 		})
@@ -68,14 +68,17 @@ public class Endpoints
 		.<Rest.Type>cast()
 		.process((parameters) ->
 		{
+			boolean isNewDynamicEntity = true;
+			Dynamic.Type instance = null;
+			
 			try
 			{
-				Dynamic.Type instance = null;
 				if( !parameters.isEmpty("id") )
 				{
 					instance = Registry.of(Dynamic.class).get(parameters.asString("id"));
 					if( instance == null ) throw new HttpException(413, "Invalid dynamic entity id to update");
 					instance.parameter("code", parameters.get("code"));
+					isNewDynamicEntity = false;
 				}
 				else
 					instance = Factory.of(Dynamic.class).get(Dynamic.class).create(Data.map().put("parameters", Data.map().put("code", parameters.get("code"))));
@@ -90,10 +93,16 @@ public class Endpoints
 			}
 			catch(CompileException ce)
 			{
+				// in case it is a new entity, delete it if it failed
+				if( isNewDynamicEntity && instance != null )
+					Registry.of(Dynamic.class).remove(instance.id());
 				throw new HttpException(413, Data.map().put("error", ce.data));
 			}
 			catch(Exception e)
 			{
+				// in case it is a new entity, delete it if it failed
+				if( isNewDynamicEntity && instance != null )
+					Registry.of(Dynamic.class).remove(instance.id());
 				throw new HttpException(400, e);
 			}
 		})
