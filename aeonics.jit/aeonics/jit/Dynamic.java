@@ -38,6 +38,16 @@ public class Dynamic extends Item<Dynamic.Type>
 				.description("Link to the dynamically generated entity. The target category will be modified at runtime to reflect the category of the generated entity.")
 				.category(Dynamic.class)
 				.min(0).max(1));
+			onCreate((data, instance) ->
+			{
+				if( !data.get("parameters").isEmpty("code") )
+					instance.compile();
+			});
+			onUpdate((data, instance) ->
+			{
+				if( !data.get("parameters").isEmpty("code") )
+					instance.compile();
+			});
 		}
 	}
 	
@@ -129,7 +139,8 @@ public class Dynamic extends Item<Dynamic.Type>
 		@Override
 		public Data snapshot()
 		{
-			Data s = super.snapshot();
+			Data s = super.snapshot()
+				.put("related_module", module());
 			s.remove("relationships");
 			return s;
 		}
