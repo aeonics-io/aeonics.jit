@@ -66,7 +66,7 @@ public class Dynamic extends Item<Dynamic.Type>
 			// cleanup the entity from the registry
 			// and cleanup the factory in case it is linked to this entity
 			Entity e = entity.getAndSet(null);
-
+			compileError = null;
 			if( e != null )
 			{
 				removeRelation("child", e);
@@ -79,11 +79,30 @@ public class Dynamic extends Item<Dynamic.Type>
 		
 		private AtomicReference<Entity> entity = new AtomicReference<>();
 		private String module = null;
+		private Data compileError = null;
 		
+		/**
+		 * Returns the last compilation error, or null if everything went well.
+		 * @return the last compilation error, or null if everything went well.
+		 */
+		public Data error() { return compileError; } 
+		
+		/**
+		 * Returns the last compiled entity, or null if an error happened
+		 * @return the last compiled entity, or null if an error happened
+		 */
 		public Entity entity() { return entity.get(); }
 		
+		/**
+		 * Returns the generated module name of the new entity
+		 * @return the generated module name of the new entity
+		 */
 		public String module() { return module; }
 		
+		/**
+		 * Returns the category of the newly created entity or null if an error happened
+		 * @return the category of the newly created entity or null if an error happened
+		 */
 		public String relatedCategory()
 		{
 			Entity e = entity.get();
@@ -94,7 +113,8 @@ public class Dynamic extends Item<Dynamic.Type>
 		/**
 		 * Compiles some code at runtime and returns an instance of the compiled class.
 		 * This method should only be called once the source code has changed.
-		 * @return an instance of the compiled class
+		 * In case of compilation error, the {@link #error()} method returns the error.
+		 * @return an instance of the compiled class or null if an error happened.
 		 * @throws CompileException if the compilation fails. The details are provided in the exception data.
 		 * @throws Exception if something else happens
 		 */
@@ -104,21 +124,30 @@ public class Dynamic extends Item<Dynamic.Type>
 			cleanup();
 			
 			// compile the new code
-			
-			String code = valueOf("code").asString();
-			Tuple<Object, String> instance = Compiler.compile(code);
-			Supplier<Entity> supplier = (Supplier<Entity>) instance.a;
-			Entity e = supplier.get();
-			module = instance.b;
-
-			entity.set(e);
-			
-			// update the relationship to reflect this entity's category
-			this.removeRelation("child");
-			this.defineRelation(new Relationship("child").category(e.category()));
-			this.addRelation("child", e);
-			
-			return e;
+			try
+			{
+				String code = valueOf("code").asString();
+				Tuple<Object, String> instance = Compiler.compile(code);
+				Supplier<Entity> supplier = (Supplier<Entity>) instance.a;
+				Entity e = supplier.get();
+				if( e == null ) return null;
+				
+				module = instance.b;
+	
+				entity.set(e);
+				
+				// update the relationship to reflect this entity's category
+				this.removeRelation("child");
+				this.defineRelation(new Relationship("child").category(e.category()));
+				this.addRelation("child", e);
+				
+				return e;
+			}
+			catch(CompileException ce)
+			{
+				compileError = ce.data;
+				return null;
+			}
 		}
 		
 		/**

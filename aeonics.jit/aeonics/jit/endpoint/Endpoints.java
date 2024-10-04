@@ -83,22 +83,33 @@ public class Endpoints
 				else
 					instance = Factory.of(Dynamic.class).get(Dynamic.class).create(Data.map().put("parameters", Data.map().put("code", parameters.get("code"))));
 				
+				Data error = instance.error();
+				if( error != null )
+				{
+					// in case it is a new entity, delete it if it failed
+					if( isNewDynamicEntity && instance != null )
+						Registry.of(Dynamic.class).remove(instance.id());
+					throw new HttpException(413, Data.map().put("error", error));
+				}
+				
 				Entity entity = instance.entity();
+				if( entity == null )
+				{
+					// in case it is a new entity, delete it if it failed
+					if( isNewDynamicEntity && instance != null )
+						Registry.of(Dynamic.class).remove(instance.id());
+					throw new HttpException(413, Data.map().put("error", Data.list(Data.list("ERROR", 0, 0, "The code did not return a valid entity"))));
+				}
 				
 				return Data.map()
 					.put("id", instance.id())
 					.put("entity_category", entity.category())
 					.put("entity_id", entity.id());
 			}
-			catch(CompileException ce)
-			{
-				// in case it is a new entity, delete it if it failed
-				if( isNewDynamicEntity && instance != null )
-					Registry.of(Dynamic.class).remove(instance.id());
-				throw new HttpException(413, Data.map().put("error", ce.data));
-			}
 			catch(Exception e)
 			{
+				if( e instanceof HttpException ) throw e;
+				
 				// in case it is a new entity, delete it if it failed
 				if( isNewDynamicEntity && instance != null )
 					Registry.of(Dynamic.class).remove(instance.id());
