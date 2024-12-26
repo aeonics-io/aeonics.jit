@@ -1,6 +1,6 @@
 ## Plugin: "aeonics.jit"
 
-This *Bloodstream Enterprise Suite* plugin provides dynamic runtime compilation
+This Aeonics software plugin provides dynamic runtime compilation
 and execution of components from simple source files.
 
 ## Compile and package
