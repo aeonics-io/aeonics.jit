@@ -70,6 +70,7 @@ public class Dynamic extends Item<Dynamic.Type>
 			if( e != null )
 			{
 				removeRelation("child", e);
+				e.internal(false);
 				Registry.of(e.category()).remove(e.id());
 				
 				if( e.type().startsWith(module()) )
@@ -80,12 +81,13 @@ public class Dynamic extends Item<Dynamic.Type>
 		private AtomicReference<Entity> entity = new AtomicReference<>();
 		private String module = null;
 		private Data compileError = null;
+		private Exception runtimeError = null;
 		
 		/**
 		 * Returns the last compilation error, or null if everything went well.
 		 * @return the last compilation error, or null if everything went well.
 		 */
-		public Data error() { return compileError; } 
+		public Data error() throws Exception { if( runtimeError != null ) throw runtimeError; return compileError; } 
 		
 		/**
 		 * Returns the last compiled entity, or null if an error happened
@@ -128,12 +130,14 @@ public class Dynamic extends Item<Dynamic.Type>
 			{
 				String code = valueOf("code").asString();
 				Tuple<Object, String> instance = Compiler.compile(code);
-				Supplier<Entity> supplier = (Supplier<Entity>) instance.a;
+				Supplier<? extends Entity> supplier = (Supplier<? extends Entity>) instance.a;
 				Entity e = supplier.get();
 				if( e == null ) return null;
 				
 				module = instance.b;
 	
+				e.internal(true);
+				e.snapshotMode(SnapshotMode.NONE);
 				entity.set(e);
 				
 				// update the relationship to reflect this entity's category
@@ -146,6 +150,11 @@ public class Dynamic extends Item<Dynamic.Type>
 			catch(CompileException ce)
 			{
 				compileError = ce.data;
+				return null;
+			}
+			catch(Exception e)
+			{
+				runtimeError = e;
 				return null;
 			}
 		}

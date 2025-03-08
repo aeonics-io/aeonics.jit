@@ -89,7 +89,16 @@ public class Endpoints
 					// in case it is a new entity, delete it if it failed
 					if( isNewDynamicEntity && instance != null )
 						Registry.of(Dynamic.class).remove(instance.id());
-					throw new HttpException(413, Data.map().put("error", error));
+					if( error.isList() )
+					{
+						error = error.get(0);
+						throw new HttpException(413, Data.map().put("error", Data.map()
+							.put("code", 413)
+							.put("message", "Error at line " + error.get(1) + ": " + error.asString(3))
+							.put("line", error.get(1))
+						));
+					}
+					else throw new HttpException(413, Data.map().put("error", error));
 				}
 				
 				Entity entity = instance.entity();
@@ -108,11 +117,28 @@ public class Endpoints
 			}
 			catch(Exception e)
 			{
-				if( e instanceof HttpException ) throw e;
-				
 				// in case it is a new entity, delete it if it failed
 				if( isNewDynamicEntity && instance != null )
 					Registry.of(Dynamic.class).remove(instance.id());
+				
+				if( e.getCause() instanceof HttpException ) e = (Exception) e.getCause();
+				if( e instanceof HttpException )
+				{
+					Data data = ((HttpException)e).data;
+					if( data != null && data.isList() )
+					{
+						data = data.get(0);
+						((HttpException)e).data = Data.map().put("error", Data.map()
+							.put("code", 413)
+							.put("message", "Error at line " + data.get(1) + ": " + data.asString(3))
+							.put("line", data.get(1))
+						);
+					}
+					else if( data == null || !data.containsKey("error") )
+						((HttpException)e).data = Data.map().put("error", data);
+					throw e;
+				}
+				
 				throw new HttpException(400, e);
 			}
 		})
