@@ -16,7 +16,7 @@ public class Endpoints
 {
 	private Endpoints() { /* no instances */ }
 	
-	private static final String ROOT = "/api/jit/";
+	private static final String ROOT = "/api/admin/jit/";
 	
 	public static void register()
 	{
