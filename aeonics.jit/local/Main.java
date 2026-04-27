@@ -8,8 +8,8 @@ import aeonics.template.Factory;
 
 public class Main extends Plugin
 {
-	public String summary() { return "Jit v1.0"; }
-	public String description() { return "Provides dynamic runtime compilation and execution of components from simple source files."; }
+	public String summary() { return "Jit v1.0.0"; }
+	public String description() { return "Aeonics Just-In-Time Compilation"; }
 	
 	public void start()
 	{
