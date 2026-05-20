@@ -49,7 +49,7 @@ public class Endpoints
 	private static final Endpoint.Rest.Type dynamic = new Endpoint.Rest() { }
 		.template()
 		.returns("In case the compilation is successful, the response contains the id of the new dynamic entity, the genetated entity category, and the generated entity id. "
-				+ "In case of error, a 413 status code is returned with the error property set to the compilation error details.")
+				+ "In case of error, a 422 status code is returned with the error property set to the compilation error details.")
 		.summary("Create a new entity from source code")
 		.description("This endpoint compiles the provided source code and registers the entity instance in the registry."
 			+ "The endpoint returns the newly created entity id and category.")
@@ -76,7 +76,7 @@ public class Endpoints
 				if( !parameters.isEmpty("id") )
 				{
 					instance = Registry.of(Dynamic.class).get(parameters.asString("id"));
-					if( instance == null ) throw new HttpException(413, "Invalid dynamic entity id to update");
+					if( instance == null ) throw new HttpException(422, "Invalid dynamic entity id to update");
 					Factory.update(instance, Data.map().put("parameters", Data.map().put("code", parameters.get("code"))));
 					isNewDynamicEntity = false;
 				}
@@ -92,13 +92,13 @@ public class Endpoints
 					if( error.isList() )
 					{
 						error = error.get(0);
-						throw new HttpException(413, Data.map().put("error", Data.map()
-							.put("code", 413)
+						throw new HttpException(422, Data.map().put("error", Data.map()
+							.put("code", 422)
 							.put("message", "Error at line " + error.get(1) + ": " + error.asString(3))
 							.put("line", error.get(1))
 						));
 					}
-					else throw new HttpException(413, Data.map().put("error", error));
+					else throw new HttpException(422, Data.map().put("error", error));
 				}
 				
 				Entity entity = instance.entity();
@@ -107,7 +107,7 @@ public class Endpoints
 					// in case it is a new entity, delete it if it failed
 					if( isNewDynamicEntity && instance != null )
 						Registry.of(Dynamic.class).remove(instance.id());
-					throw new HttpException(413, Data.map().put("error", Data.list(Data.list("ERROR", 0, 0, "The code did not return a valid entity"))));
+					throw new HttpException(422, Data.map().put("error", Data.list(Data.list("ERROR", 0, 0, "The code did not return a valid entity"))));
 				}
 				
 				return Data.map()
@@ -129,7 +129,7 @@ public class Endpoints
 					{
 						data = data.get(0);
 						((HttpException)e).data = Data.map().put("error", Data.map()
-							.put("code", 413)
+							.put("code", 422)
 							.put("message", "Error at line " + data.get(1) + ": " + data.asString(3))
 							.put("line", data.get(1))
 						);
