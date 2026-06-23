@@ -4,6 +4,8 @@ module aeonics.jit
 	requires aeonics.core;
 	requires aeonics.http;
 	requires java.compiler;
-	
+
+	exports aeonics.jit.policy;
+
 	provides aeonics.Plugin with local.Main;
 }

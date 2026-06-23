@@ -2,6 +2,7 @@ package local;
 
 import aeonics.Plugin;
 import aeonics.jit.Dynamic;
+import aeonics.jit.Policy;
 import aeonics.manager.Lifecycle;
 import aeonics.manager.Lifecycle.Phase;
 import aeonics.template.Factory;
@@ -20,6 +21,7 @@ public class Main extends Plugin
 	private void onLoad()
 	{
 		Factory.add(new Dynamic());
+		Factory.add(new Policy());
 	}
 	
 	private void onRun()

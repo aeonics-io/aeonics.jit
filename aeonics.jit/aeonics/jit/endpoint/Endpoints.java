@@ -7,6 +7,7 @@ import aeonics.http.Endpoint;
 import aeonics.http.Endpoint.Rest;
 import aeonics.http.HttpException;
 import aeonics.jit.Compiler.CompileException;
+import aeonics.jit.policy.Policy;
 import aeonics.jit.Dynamic;
 import aeonics.template.Factory;
 import aeonics.template.Parameter;
@@ -64,6 +65,12 @@ public class Endpoints
 			.format(Parameter.Format.TEXT)
 			.rule(Parameter.Rule.ID)
 			)
+		.add(new Parameter("policy").optional(true).rule(Parameter.Rule.ID)
+			.summary("Compilation policy id")
+			.description("If provided, the referenced policy inspects the classes used by the compiled code and may reject the compilation.")
+			.format(Parameter.Format.TEXT)
+			.rule(Parameter.Rule.ID)
+			)
 		.create()
 		.<Rest.Type>cast()
 		.process((parameters) ->
@@ -73,15 +80,23 @@ public class Endpoints
 			
 			try
 			{
+				Data entityData = Data.map().put("parameters", Data.map().put("code", parameters.get("code")));
+				if( !parameters.isEmpty("policy") )
+				{
+					if( Registry.of(Policy.class).get(parameters.asString("policy")) == null )
+						throw new HttpException(422, "Unknown compilation policy");
+					entityData.put("relationships", Data.map().put("policy", Data.list().add(Data.map().put("id", parameters.asString("policy")))));
+				}
+
 				if( !parameters.isEmpty("id") )
 				{
 					instance = Registry.of(Dynamic.class).get(parameters.asString("id"));
 					if( instance == null ) throw new HttpException(422, "Invalid dynamic entity id to update");
-					Factory.update(instance, Data.map().put("parameters", Data.map().put("code", parameters.get("code"))));
+					Factory.update(instance, entityData);
 					isNewDynamicEntity = false;
 				}
 				else
-					instance = Factory.of(Dynamic.class).get(Dynamic.class).create(Data.map().put("parameters", Data.map().put("code", parameters.get("code"))));
+					instance = Factory.of(Dynamic.class).get(Dynamic.class).create(entityData);
 				
 				Data error = instance.error();
 				if( error != null )

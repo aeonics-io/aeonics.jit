@@ -7,6 +7,7 @@ import aeonics.data.Data;
 import aeonics.entity.Entity;
 import aeonics.entity.Registry;
 import aeonics.jit.Compiler.CompileException;
+import aeonics.jit.policy.Policy;
 import aeonics.template.Factory;
 import aeonics.template.Item;
 import aeonics.template.Parameter;
@@ -37,6 +38,11 @@ public class Dynamic extends Item<Dynamic.Type>
 				.summary("Linked entity")
 				.description("Link to the dynamically generated entity. The target category will be modified at runtime to reflect the category of the generated entity.")
 				.category(Dynamic.class)
+				.min(0).max(1));
+			add(new Relationship("policy")
+				.summary("Compilation policy")
+				.description("Optional policy that inspects the classes referenced by the compiled code and may reject the compilation.")
+				.category(Policy.class)
 				.min(0).max(1));
 			onCreate((data, instance) ->
 			{
@@ -129,7 +135,8 @@ public class Dynamic extends Item<Dynamic.Type>
 			try
 			{
 				String code = valueOf("code").asString();
-				Tuple<Object, String> instance = Compiler.compile(code);
+				Policy.Type policy = firstRelation("policy");
+				Tuple<Object, String> instance = Compiler.compile(code, policy == null ? null : policy.inspector());
 				Supplier<? extends Entity> supplier = (Supplier<? extends Entity>) instance.a;
 				Entity e = supplier.get();
 				if( e == null ) return null;
