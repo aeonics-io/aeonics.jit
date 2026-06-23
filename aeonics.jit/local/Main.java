@@ -2,7 +2,7 @@ package local;
 
 import aeonics.Plugin;
 import aeonics.jit.Dynamic;
-import aeonics.jit.Policy;
+import aeonics.jit.policy.Policy;
 import aeonics.manager.Lifecycle;
 import aeonics.manager.Lifecycle.Phase;
 import aeonics.template.Factory;
