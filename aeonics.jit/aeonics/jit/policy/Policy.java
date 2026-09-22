@@ -1,6 +1,5 @@
 package aeonics.jit.policy;
 
-import java.util.Set;
 import java.util.function.Supplier;
 
 import aeonics.entity.Entity;
@@ -14,9 +13,9 @@ import aeonics.util.StringUtils;
 /**
  * This item carries a compilation policy applied by {@link Dynamic} when it compiles code.
  * <p>
- * The policy holds an inspector that receives the set of class names, in dot form, referenced by the
- * compiled bytecode and throws to reject the compilation. A policy is created in code, given an
- * inspector, and linked to a {@link Dynamic} entity through its {@code policy} relationship.
+ * The policy holds an inspector that receives the {@link References} of the compiled bytecode and
+ * throws to reject the compilation. A policy is created in code, given an inspector, and linked to a
+ * {@link Dynamic} entity through its {@code policy} relationship.
  */
 public class Policy extends Item<Policy.Type>
 {
@@ -25,20 +24,20 @@ public class Policy extends Item<Policy.Type>
 	 */
 	public static class Type extends Entity
 	{
-		private Consumer<Set<String>> inspector;
+		private Consumer<References> inspector;
 
 		/**
 		 * Sets the inspector applied during compilation.
-		 * @param value receives the referenced class names and throws to reject the compilation
+		 * @param value receives the references of the compiled code and throws to reject the compilation
 		 * @return this
 		 */
-		public Policy.Type inspector(Consumer<Set<String>> value) { this.inspector = value; return this; }
+		public Policy.Type inspector(Consumer<References> value) { this.inspector = value; return this; }
 
 		/**
 		 * Returns the inspector applied during compilation.
 		 * @return the inspector, or null if none is set
 		 */
-		public Consumer<Set<String>> inspector() { return inspector; }
+		public Consumer<References> inspector() { return inspector; }
 
 		/**
 		 * Hardcoded category to the {@link Policy} class

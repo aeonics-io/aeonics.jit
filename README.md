@@ -29,9 +29,36 @@ jar -c --file=aeonics.jit.jar \
 **This plugin enables arbitrary Java code execution at runtime.**
 
 The JIT compilation endpoint (`/api/admin/jit/entity`) accepts Java source code, compiles it
-in-process, and instantiates the result with the same privileges as the host JVM. There is no
-sandboxing, no class whitelist, and no restriction on what the compiled code can do. This is
-by design.
+in-process, and instantiates the result with the same privileges as the host JVM. By default
+there is no sandboxing and no restriction on what the compiled code can do. This is by design.
+
+The endpoint accepts an optional `policy` parameter naming a registered `policy.Policy`
+entity, whose inspector receives the `policy.References` of the compiled bytecode (collected by
+`Compiler.scan()`, after `javac` succeeds and before the class is loaded) and may throw to
+reject the deployment. Uniqorn uses it to keep entry-level plans inside the framework API.
+
+`References` reports two axes, because a class name on its own cannot separate them:
+
+- `invoked()` — the members the code calls or reads, as `package.Class.member`. This is where
+  capability sits. The owner is the type the call was compiled against, not the type declaring
+  the member, so an inherited member invoked from a subclass is reported against the subclass.
+- `interfaces()` — the interfaces the code implements. These leave no trace in `invoked()`:
+  an interface has no constructor to chain to, and a call to an inherited default method is
+  compiled against the implementing class.
+
+Superclasses are deliberately absent: every subclass constructor chains to a superclass
+constructor, so `extends Foo` always surfaces as `Foo.<init>` in `invoked()`.
+
+Types named only in descriptors and bare class constants are deliberately **not** reported. A
+parameter or return type can only be acted upon through a call, which is already reported
+against its own owner, and the `InnerClasses` attribute forces the enclosing class of every
+nested type named anywhere into the constant pool — which is why a naive scan reports
+`java.lang.invoke.MethodHandles` for every class containing a lambda or a string concatenation.
+
+A policy constrains what a caller can compile against, but the code that does get compiled
+still runs with full JVM privileges. It cannot see through a *confused deputy*: an allowed API
+that resolves a type from a caller-supplied string reflects on the caller's behalf without any
+of it appearing in `References`. Do not mistake an attached policy for isolation.
 
 ### Rationale
 

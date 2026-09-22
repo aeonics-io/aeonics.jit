@@ -22,6 +22,7 @@ import javax.tools.ToolProvider;
 
 import aeonics.Plugin;
 import aeonics.data.Data;
+import aeonics.jit.policy.References;
 import aeonics.manager.Logger;
 import aeonics.manager.Manager;
 import aeonics.util.Functions.Consumer;
@@ -89,16 +90,16 @@ public class Compiler
 	}
 
 	/**
-	 * Compiles the given code and hands the caller every class the resulting bytecode references,
-	 * before the class is loaded or instantiated. The inspector receives the referenced class names
-	 * in dot form; throwing from it aborts the whole compilation and nothing is loaded or run.
+	 * Compiles the given code and hands the caller the members and interfaces the resulting bytecode
+	 * references, before the class is loaded or instantiated. Throwing from the inspector aborts the
+	 * whole compilation and nothing is loaded or run.
 	 * @param <T> the compiled instance type
 	 * @param code the source code to compile
-	 * @param inspector receives the referenced class names and may throw to reject the code, or null to skip inspection
+	 * @param inspector receives the references and may throw to reject the code, or null to skip inspection
 	 * @return the compiled instance and its generated module name
 	 * @throws Exception if the inspector rejects the code, or compilation fails
 	 */
-	public static <T> Tuple<T, String> compile(String code, Consumer<Set<String>> inspector) throws Exception
+	public static <T> Tuple<T, String> compile(String code, Consumer<References> inspector) throws Exception
 	{
 		String className = null;
 		
@@ -132,7 +133,7 @@ public class Compiler
 	}
 
 	@SuppressWarnings("unchecked")
-	private static <T> Tuple<T, String> compile(String className, String code, ClassLoader context, Consumer<Set<String>> inspector) throws Exception
+	private static <T> Tuple<T, String> compile(String className, String code, ClassLoader context, Consumer<References> inspector) throws Exception
 	{
 		JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
 		if( javac == null )
@@ -159,14 +160,15 @@ public class Compiler
 		
 		if( task.call() )
 		{
-			// hand every class the compiled bytecode references to the inspector before anything is loaded
+			// hand the references of every compiled class to the inspector before anything is loaded
 			if( inspector != null )
 			{
-				Set<String> involved = new HashSet<>();
+				Set<String> invoked = new HashSet<>();
+				Set<String> interfaces = new HashSet<>();
 				DynamicClassLoader loader = (DynamicClassLoader) fileManager.getClassLoader(null);
 				for( DynamicFileObject.Output o : loader.classes.values() )
-					involved.addAll(referencedClasses(o.bytecode.toByteArray()));
-				inspector.accept(involved);
+					scan(o.bytecode.toByteArray(), invoked, interfaces);
+				inspector.accept(new References(module, invoked, interfaces));
 			}
 
 			try
@@ -191,16 +193,22 @@ public class Compiler
 	}
 
 	/**
-	 * Reads the constant pool of a compiled class and returns the dot-form names of every class it
-	 * references: supertypes, interfaces, field and method owners, and the object types named in
-	 * field and method descriptors.
+	 * Reads a compiled class and collects the members it invokes and the interfaces it implements.
+	 * <p>
+	 * Only these two axes are collected. Types named in descriptors are deliberately ignored: a
+	 * parameter, return or field type can only be acted upon through a call, which is reported here
+	 * against its own owner. Bare class constants are ignored for the same reason, and because the
+	 * {@code InnerClasses} attribute forces the enclosing class of every nested type named anywhere
+	 * into the pool, which makes bare constants report types the code never touches. The compiler
+	 * emits such an entry for {@code java.lang.invoke.MethodHandles} in every class holding a lambda
+	 * or a string concatenation, purely to record that {@code Lookup} nests inside it.
 	 * @param bytecode the compiled class bytes
-	 * @return the referenced class names in dot form
+	 * @param invoked collects the invoked members as {@code package.Class.member} in dot form
+	 * @param interfaces collects the implemented interface names in dot form
 	 * @throws IOException if the bytecode cannot be read
 	 */
-	private static Set<String> referencedClasses(byte[] bytecode) throws IOException
+	private static void scan(byte[] bytecode, Set<String> invoked, Set<String> interfaces) throws IOException
 	{
-		Set<String> out = new HashSet<>();
 		DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytecode));
 		in.readInt();           // 0xCAFEBABE magic
 		in.readUnsignedShort(); // minor version
@@ -208,7 +216,9 @@ public class Compiler
 		int count = in.readUnsignedShort();
 		String[] utf8 = new String[count];
 		int[] classNameIndex = new int[count];
-		int[] descriptorIndex = new int[count];
+		int[] refClassIndex = new int[count];
+		int[] refNameAndTypeIndex = new int[count];
+		int[] nameIndex = new int[count];
 		for( int i = 1; i < count; i++ )
 		{
 			int tag = in.readUnsignedByte();
@@ -216,59 +226,55 @@ public class Compiler
 			{
 				case 1:  utf8[i] = in.readUTF(); break;                                              // Utf8
 				case 7:  classNameIndex[i] = in.readUnsignedShort(); break;                          // Class -> name
-				case 8:  in.readUnsignedShort(); break;                                              // String
-				case 16: descriptorIndex[i] = in.readUnsignedShort(); break;                         // MethodType -> descriptor
-				case 19: case 20: in.readUnsignedShort(); break;                                     // Module, Package
-				case 12: in.readUnsignedShort(); descriptorIndex[i] = in.readUnsignedShort(); break; // NameAndType -> name, descriptor
+				case 12: nameIndex[i] = in.readUnsignedShort(); in.readUnsignedShort(); break;       // NameAndType -> name, descriptor
+				case 9: case 10: case 11:                                                            // Field/Method/InterfaceMethodref -> class, name and type
+					refClassIndex[i] = in.readUnsignedShort();
+					refNameAndTypeIndex[i] = in.readUnsignedShort(); break;
+				case 8: case 16: case 19: case 20: in.readUnsignedShort(); break;                    // String, MethodType, Module, Package
 				case 15: in.readUnsignedByte(); in.readUnsignedShort(); break;                       // MethodHandle
-				case 3: case 4: case 9: case 10: case 11: case 17: case 18: in.readInt(); break;     // Integer, Float, Field/Method/InterfaceMethodref, Dynamic, InvokeDynamic
+				case 3: case 4: case 17: case 18: in.readInt(); break;                               // Integer, Float, Dynamic, InvokeDynamic
 				case 5: case 6: in.readLong(); i++; break;                                           // Long, Double occupy two pool slots
 				default: throw new IOException("Unexpected constant pool tag " + tag);
 			}
 		}
+
+		// a MethodHandle constant points back at a Field/Method/InterfaceMethodref, so lambda bodies,
+		// method references and the bootstrap methods behind lambdas and string concatenation are all
+		// already covered by the references collected above
 		for( int i = 1; i < count; i++ )
 		{
-			if( classNameIndex[i] != 0 ) addClassName(out, utf8[classNameIndex[i]]);
-			if( descriptorIndex[i] != 0 ) addDescriptorTypes(out, utf8[descriptorIndex[i]]);
+			if( refClassIndex[i] == 0 ) continue;
+			String type = utf8[classNameIndex[refClassIndex[i]]];
+			String member = utf8[nameIndex[refNameAndTypeIndex[i]]];
+			if( type == null || member == null ) continue;
+			invoked.add(owner(type) + "." + member);
 		}
-		return out;
+
+		in.readUnsignedShort(); // access flags
+		in.readUnsignedShort(); // this class
+		in.readUnsignedShort(); // super class, already covered by the constructor it is chained to
+		int n = in.readUnsignedShort();
+		for( int i = 0; i < n; i++ )
+		{
+			String name = utf8[classNameIndex[in.readUnsignedShort()]];
+			if( name != null ) interfaces.add(owner(name));
+		}
 	}
 
 	/**
-	 * Adds a class name in internal {@code java/lang/Foo} or array {@code [Ljava/lang/Foo;} form to
-	 * the set in dot form, skipping primitive arrays.
-	 * @param out the set to add to
-	 * @param name the internal class name
+	 * Converts an owner name in internal {@code java/lang/Foo} form to dot form. An array owner is
+	 * reduced to its element type, and a primitive array to {@link Object} since it declares no
+	 * member of its own.
+	 * @param name the internal owner name
+	 * @return the owner name in dot form
 	 */
-	private static void addClassName(Set<String> out, String name)
+	private static String owner(String name)
 	{
-		if( name == null || name.isEmpty() ) return;
 		int dims = 0;
 		while( dims < name.length() && name.charAt(dims) == '[' ) dims++;
-		if( dims > 0 )
-		{
-			if( dims < name.length() && name.charAt(dims) == 'L' && name.endsWith(";") )
-				out.add(name.substring(dims + 1, name.length() - 1).replace('/', '.'));
-			return;
-		}
-		out.add(name.replace('/', '.'));
-	}
-
-	/**
-	 * Adds every {@code L...;} object type named in a field or method descriptor to the set in dot form.
-	 * @param out the set to add to
-	 * @param descriptor the field or method descriptor
-	 */
-	private static void addDescriptorTypes(Set<String> out, String descriptor)
-	{
-		if( descriptor == null ) return;
-		int i = 0;
-		while( (i = descriptor.indexOf('L', i)) >= 0 )
-		{
-			int end = descriptor.indexOf(';', i);
-			if( end < 0 ) break;
-			out.add(descriptor.substring(i + 1, end).replace('/', '.'));
-			i = end + 1;
-		}
+		if( dims == 0 ) return name.replace('/', '.');
+		if( dims < name.length() && name.charAt(dims) == 'L' && name.endsWith(";") )
+			return name.substring(dims + 1, name.length() - 1).replace('/', '.');
+		return "java.lang.Object";
 	}
 }
